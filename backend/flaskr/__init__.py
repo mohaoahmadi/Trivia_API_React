@@ -114,7 +114,29 @@ def create_app(test_config=None):
   TEST: When you click the trash icon next to a question, the question will be removed.
   This removal will persist in the database and when you refresh the page. 
   '''
+  #DONE
+  @app.route('/questions/<int:id>', methods=['DELETE'])
+  def delete_question(id):
+      try:
+          # get the question by id
+          question = Question.query.filter_by(id=id).one_or_none()
 
+          # abort 404 if no question found
+          if question is None:
+              abort(404)
+
+          # delete the question
+          question.delete()
+  
+          # return success response
+          return jsonify({
+              'success': True,
+              'deleted': id
+          })
+
+      except:
+          # if not delted, then abort with 422
+          abort(422)
   '''
   @TODO: 
   Create an endpoint to POST a new question, 
@@ -125,6 +147,70 @@ def create_app(test_config=None):
   the form will clear and the question will appear at the end of the last page
   of the questions list in the "List" tab.  
   '''
+  @app.route('/questions', methods=['POST'])
+  def post_question():
+
+      # get request body
+      body = request.get_json()
+
+      # if it contains search term
+
+      if (body.get('searchTerm')):
+          search_term = body.get('searchTerm')#fetch it
+
+          # query the database using search term
+          selection = Question.query.filter(
+              Question.question.ilike(f'%{search_term}%')).all()# use ilike for case insensitive lookup
+
+          # if no results found, then abort with 404
+          if (len(selection) == 0):
+                abort(404)
+
+          # paginate the results
+          paginated = paginate_questions(request, selection)
+
+          # return results
+          return jsonify({
+              'success': True,
+              'questions': paginated,
+              'total_questions': len(Question.query.all())
+          })
+
+      # if no search term, create new question
+      else:
+          # load data from body
+          new_question = body.get('question')
+          new_answer = body.get('answer')
+          new_difficulty = body.get('difficulty')
+          new_category = body.get('category')
+
+          # ensure all fields have data
+          if ((new_question is None) or (new_answer is None)
+                  or (new_difficulty is None) or (new_category is None)):
+              abort(422)
+
+          try:
+              # create and insert new question
+              question = Question(question=new_question, answer=new_answer,
+                                  difficulty=new_difficulty, category=new_category)
+              question.insert()
+
+              # get all questions and paginate
+              selection = Question.query.order_by(Question.id).all()
+              current_questions = paginate_questions(request, selection)
+
+              # return data to view
+              return jsonify({
+                    'success': True,
+                    'created': question.id,
+                    'question_created': question.question,
+                    'questions': current_questions,
+                    'total_questions': len(Question.query.all())
+                })
+
+          except:
+                # if no unprocessable, then abort with 422
+              abort(422)
 
   '''
   @TODO: 
@@ -136,6 +222,7 @@ def create_app(test_config=None):
   only question that include that string within their question. 
   Try using the word "title" to start. 
   '''
+  
 
   '''
   @TODO: 
@@ -145,8 +232,30 @@ def create_app(test_config=None):
   categories in the left column will cause only questions of that 
   category to be shown. 
   '''
+  @app.route('/categories/<int:id>/questions')
+  def get_questions_by_category(id):
 
 
+      # get the category by id
+      category = Category.query.filter_by(id=id).one_or_none()
+
+      # if no unprocessable, then abort with 404
+      if (category is None):
+            abort(400)
+
+      # look for matching questions
+      selection = Question.query.filter_by(category=category.id).all()
+
+      # paginate the selection
+      paginated = paginate_questions(request, selection)
+
+      # return the results
+      return jsonify({
+            'success': True,
+            'questions': paginated,
+            'total_questions': len(Question.query.all()),
+            'current_category': category.type
+      })
   '''
   @TODO: 
   Create a POST endpoint to get questions to play the quiz. 
